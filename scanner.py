@@ -58,12 +58,12 @@ class WebSecurityScanner:
                     response = self.session.get(target_url)
                     
                     if any(error in response.text.lower()  for error in  ['sql', 'mysql', 'sqlite', 'postgresql', 'oracle']): 
-                        self.report_vulnerability([
+                        self.report_vulnerability({
                             'type':'SQL Injection',
-                            'url':'url',
+                            'url':url,
                             'parameter':param,
                             'payload':payload                
-                        ])
+                        })
                         
             except Exception as e:
                 print(f"Error testing SQL injection on {url}: {str(e)}")
@@ -88,21 +88,46 @@ class WebSecurityScanner:
                     response = self.session.get(target_url)
                     
                     if any(error in response.text.lower()  for error in  ['sql', 'mysql', 'sqlite', 'postgresql', 'oracle']): 
-                        self.report_vulnerability([
-                            'type':'SQL Injection',
-                            'url':'url',
+                        self.report_vulnerability({
+                            'type':'XSS',
+                            'url':url,
                             'parameter':param,
                             'payload':payload                
-                        ])
+                        })
                         
             except Exception as e:
                 print(f"Error testing XSS injection on {url}: {str(e)}")
-                        
+    
+    def check_sensitive_info(self, url: str) -> None:
+        """Check for exposed sensitive information"""
+        sensitive_patterns = {
+            'email': r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+            'phone': r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b',
+            'ssn': r'\b\d{3}-\d{2}-\d{4}\b',
+            'api_key': r'api[_-]?key[_-]?([\'"|`])([a-zA-Z0-9]{32,45})\1'
+        }
+
+        try:
+            response = self.session.get(url)
+
+            for info_type, pattern in sensitive_patterns.items():
+                matches = re.finditer(pattern, response.text)
+                for match in matches:
+                    self.report_vulnerability({
+                        'type': 'Sensitive Information Exposure',
+                        'url': url,
+                        'info_type': info_type,
+                        'pattern': pattern
+                    })
+
+        except Exception as e:
+            print(f"Error checking sensitive information on {url}: {str(e)}")
+                            
     def scan(self) -> List[Dict]:
         
-        print(f"\n{colorama.Fore.BLUE} Starting security scan of {self.target_url}{colorama.Style.RESET_ALL}\n")
+        print(f"\n{colorama.Fore.BLUE} Starting security scan of {self.url}{colorama.Style.RESET_ALL}\n")
         
-        self.crawl(self.target.url)
+        self.crawl(self.url)
         
         with ThreadPoolExecutor(max_workers=5) as executor: 
             
@@ -112,25 +137,29 @@ class WebSecurityScanner:
                 executor.submit(self.check_sensitive_info, url)
                 
         return self.vulnerabilities
-                    
-                
-                
-                
-            
-            
-            
-            
- 
+    
+    
+    def report_vulnerability(self, vulnerability) -> None:
+        
+        self.vulnerabilities.append(vulnerability)
+        print(f"{vulnerability['type']} type vulnerability has been found\n")
+   
          
-         
-if __name__ == '__main__'   :
-    if len(sys.argv) > 1:
-        url_from_cmd = sys.argv[1]
-        crawl = WebSecurityScanner(url_from_cmd)
-        crawl.crawl(url_from_cmd)
-        print(crawl.visited_urls)
-    else:
-        print("Please provde a name as a command line argument")
+if __name__ == '__main__':
+    if len(sys.argv) != 2:
+        print("Usage: python script.py <target_url>")
+        sys.exit(1)
+
+    target_url = sys.argv[1]
+    scan = WebSecurityScanner(target_url)
+    vulnerabilities = scan.scan()
+    
+
+    
+    
+    
+    
+    
         
         
 
